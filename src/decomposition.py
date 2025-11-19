@@ -6,6 +6,7 @@ Extracts unique colors from input image and generates binary layers.
 import numpy as np
 import cv2
 from typing import List, Tuple, Optional
+from .quantization import adaptive_quantize, should_quantize
 
 
 def get_unique_colors(image: np.ndarray) -> np.ndarray:
@@ -27,7 +28,11 @@ def get_unique_colors(image: np.ndarray) -> np.ndarray:
     return unique_colors
 
 
-def decompose_to_layers(image: np.ndarray, colors: Optional[np.ndarray] = None) -> Tuple[List[np.ndarray], np.ndarray]:
+def decompose_to_layers(image: np.ndarray,
+                       colors: Optional[np.ndarray] = None,
+                       auto_quantize: bool = True,
+                       quantize_colors: int = 32,
+                       quantize_threshold: int = 50) -> Tuple[List[np.ndarray], np.ndarray, np.ndarray]:
     """
     Decompose a color image into N binary layers, one for each unique color.
 
@@ -37,29 +42,43 @@ def decompose_to_layers(image: np.ndarray, colors: Optional[np.ndarray] = None) 
     Args:
         image: Input RGB image as numpy array with shape (H, W, 3)
         colors: Optional array of colors to decompose. If None, extracts unique colors.
+        auto_quantize: If True, automatically quantize images with many colors
+        quantize_colors: Maximum number of colors when quantizing
+        quantize_threshold: Threshold for automatic quantization (number of unique colors)
 
     Returns:
         Tuple of:
         - List of binary layers (numpy arrays with dtype uint8, values 0 or 255)
         - Array of colors corresponding to each layer
+        - Processed image (quantized if auto_quantize was applied, otherwise original)
     """
-    if colors is None:
-        colors = get_unique_colors(image)
+    processed_image = image
 
-    height, width = image.shape[:2]
+    # Apply automatic color quantization if needed
+    if auto_quantize and colors is None:
+        if should_quantize(image, quantize_threshold):
+            print(f"Image has many colors. Applying color quantization to {quantize_colors} colors...")
+            processed_image, palette = adaptive_quantize(image, max_colors=quantize_colors, auto_threshold=quantize_threshold)
+            if palette is not None:
+                print(f"Quantization complete. Reduced to {len(palette)} colors.")
+
+    if colors is None:
+        colors = get_unique_colors(processed_image)
+
+    height, width = processed_image.shape[:2]
     layers = []
 
     # Create a binary layer for each unique color
     for color in colors:
         # Create mask where all channels match the target color
-        mask = np.all(image == color, axis=-1)
+        mask = np.all(processed_image == color, axis=-1)
 
         # Convert boolean mask to binary image (0 or 255)
         binary_layer = (mask * 255).astype(np.uint8)
 
         layers.append(binary_layer)
 
-    return layers, colors
+    return layers, colors, processed_image
 
 
 def layers_to_color_indices(image: np.ndarray, colors: Optional[np.ndarray] = None) -> np.ndarray:

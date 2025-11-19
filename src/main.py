@@ -35,7 +35,10 @@ class MultiLayerFilter:
                  filter_params: Optional[Dict] = None,
                  use_segmentation: bool = True,
                  f1_threshold: float = 0.5,
-                 f2_threshold: float = 0.8):
+                 f2_threshold: float = 0.8,
+                 auto_quantize: bool = True,
+                 quantize_colors: int = 32,
+                 quantize_threshold: int = 50):
         """
         Initialize the multi-layer filter.
 
@@ -45,12 +48,18 @@ class MultiLayerFilter:
             use_segmentation: Whether to use region-based segmentation
             f1_threshold: Threshold for object pixel ratio in segmentation
             f2_threshold: Threshold for labeled pixel percentage in segmentation
+            auto_quantize: Automatically quantize images with many colors
+            quantize_colors: Maximum number of colors when quantizing
+            quantize_threshold: Threshold for automatic quantization (number of unique colors)
         """
         self.filter_type = filter_type
         self.filter_params = filter_params or {}
         self.use_segmentation = use_segmentation
         self.f1_threshold = f1_threshold
         self.f2_threshold = f2_threshold
+        self.auto_quantize = auto_quantize
+        self.quantize_colors = quantize_colors
+        self.quantize_threshold = quantize_threshold
 
         # Create filter instance
         self.binary_filter = create_default_filter(filter_type, **self.filter_params)
@@ -65,8 +74,13 @@ class MultiLayerFilter:
         Returns:
             Filtered RGB image
         """
-        # Step 1: Decompose to binary layers
-        layers, colors = decompose_to_layers(image)
+        # Step 1: Decompose to binary layers (with optional quantization)
+        layers, colors, processed_image = decompose_to_layers(
+            image,
+            auto_quantize=self.auto_quantize,
+            quantize_colors=self.quantize_colors,
+            quantize_threshold=self.quantize_threshold
+        )
 
         # Step 2: Filter each layer
         filtered_layers = apply_binary_filter(layers, self.binary_filter)
@@ -97,15 +111,15 @@ class MultiLayerFilter:
                 filtered_layers,
                 colors,
                 label_mask,
-                region_info
+                region_info,
+                original_image=processed_image
             )
         else:
             # Simple reconstruction with global priorities
-            priorities = calculate_layer_priorities(filtered_layers, strategy='frequency')
-            output_image = reconstruct_with_priority_ordering(
+            output_image = reconstruct_image(
                 filtered_layers,
                 colors,
-                priorities
+                original_image=processed_image
             )
 
         return output_image
@@ -121,7 +135,11 @@ class MultiLayerFilter:
             Dictionary with layer information
         """
         colors = get_unique_colors(image)
-        layers, _ = decompose_to_layers(image, colors)
+        layers, _, _ = decompose_to_layers(
+            image,
+            colors,
+            auto_quantize=False
+        )
 
         layer_info = {
             'num_layers': len(layers),

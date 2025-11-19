@@ -11,7 +11,8 @@ from typing import List, Dict, Optional
 def reconstruct_image(filtered_layers: List[np.ndarray],
                      colors: np.ndarray,
                      label_mask: Optional[np.ndarray] = None,
-                     priority_map: Optional[np.ndarray] = None) -> np.ndarray:
+                     priority_map: Optional[np.ndarray] = None,
+                     original_image: Optional[np.ndarray] = None) -> np.ndarray:
     """
     Reconstruct color image from filtered binary layers.
 
@@ -23,6 +24,7 @@ def reconstruct_image(filtered_layers: List[np.ndarray],
         colors: Array of colors corresponding to each layer (shape: N x 3)
         label_mask: Optional label mask from segmentation
         priority_map: Optional priority values for each pixel
+        original_image: Optional original image for fallback on black pixels
 
     Returns:
         Reconstructed RGB image
@@ -72,13 +74,31 @@ def reconstruct_image(filtered_layers: List[np.ndarray],
             mask = best_layer == layer_idx
             output_image[mask] = colors[layer_idx]
 
+    # Fallback to original image for any remaining black pixels
+    if original_image is not None:
+        black_pixels = (output_image == 0).all(axis=-1)
+        if np.any(black_pixels):
+            output_image[black_pixels] = original_image[black_pixels]
+    elif np.any((output_image == 0).all(axis=-1)):
+        # If no original image but have black pixels, try to fill from nearest non-black
+        black_pixels = (output_image == 0).all(axis=-1)
+        for layer_idx, layer in enumerate(filtered_layers):
+            remaining_black = black_pixels & (output_image == 0).all(axis=-1)
+            if not np.any(remaining_black):
+                break
+            # Assign color from any layer that has pixels
+            mask = remaining_black & (layer > 0)
+            if np.any(mask):
+                output_image[mask] = colors[layer_idx]
+
     return output_image
 
 
 def reconstruct_with_regions(filtered_layers: List[np.ndarray],
                             colors: np.ndarray,
                             label_mask: np.ndarray,
-                            region_info: List[Dict]) -> np.ndarray:
+                            region_info: List[Dict],
+                            original_image: Optional[np.ndarray] = None) -> np.ndarray:
     """
     Reconstruct image using region-based color assignment.
 
@@ -89,6 +109,7 @@ def reconstruct_with_regions(filtered_layers: List[np.ndarray],
         colors: Array of colors corresponding to each layer
         label_mask: Label mask from segmentation
         region_info: List of region information dictionaries
+        original_image: Optional original image for fallback on unlabeled pixels
 
     Returns:
         Reconstructed RGB image
@@ -107,10 +128,21 @@ def reconstruct_with_regions(filtered_layers: List[np.ndarray],
     # Handle any unlabeled pixels (should be rare after fill_unlabeled_pixels)
     unlabeled = label_mask == 0
     if np.any(unlabeled):
-        # Use simple layer-based reconstruction for unlabeled pixels
+        # First try simple layer-based reconstruction
         for layer_idx, layer in enumerate(filtered_layers):
             mask = unlabeled & (layer > 0)
             output_image[mask] = colors[layer_idx]
+
+        # For remaining unlabeled pixels, use original image if available
+        still_unlabeled = (output_image == 0).all(axis=-1)
+        if original_image is not None and np.any(still_unlabeled):
+            output_image[still_unlabeled] = original_image[still_unlabeled]
+
+    # Final check: if any black pixels remain and we have original, fill them
+    if original_image is not None:
+        remaining_black = (output_image == 0).all(axis=-1)
+        if np.any(remaining_black):
+            output_image[remaining_black] = original_image[remaining_black]
 
     return output_image
 

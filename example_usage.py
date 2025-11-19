@@ -134,11 +134,19 @@ def example_basic_filtering():
 
     # Create synthetic map
     print("Creating synthetic map image...")
-    original = create_synthetic_map(256)
+    # original = create_synthetic_map(256)
+    original = load_image("input.png")
 
     # Get layer information
     colors = get_unique_colors(original)
     print(f"Image has {len(colors)} unique colors")
+
+    # Quantize if needed (for fair evaluation)
+    from src.quantization import should_quantize, quantize_colors
+    if should_quantize(original, threshold=50):
+        print(f"Quantizing image to discrete color palette...")
+        original, palette = quantize_colors(original, n_colors=32)
+        print(f"Quantized to {len(palette)} colors")
 
     # Add noise
     print("Adding impulsive noise (10%)...")
@@ -149,7 +157,8 @@ def example_basic_filtering():
     mlf = MultiLayerFilter(
         filter_type='morphological',
         filter_params={'operation': 'opening', 'kernel_size': 3},
-        use_segmentation=True
+        use_segmentation=True,
+        auto_quantize=False  # Already quantized
     )
     filtered = mlf.filter_image(noisy)
 
@@ -182,12 +191,13 @@ def example_layer_visualization():
 
     # Create synthetic map
     print("Creating synthetic map image...")
-    image = create_synthetic_map(256)
+    # image = create_synthetic_map(256)
+    image = load_image("input.png")
 
     # Decompose to layers
     from src.decomposition import decompose_to_layers
     print("Decomposing image to layers...")
-    layers, colors = decompose_to_layers(image)
+    layers, colors, _ = decompose_to_layers(image, auto_quantize=True, quantize_colors=32, quantize_threshold=50)
 
     print(f"Decomposed into {len(layers)} layers")
     for i, color in enumerate(colors):
@@ -211,7 +221,16 @@ def example_noise_comparison():
 
     # Create synthetic map
     print("Creating synthetic map image...")
-    original = create_synthetic_map(256)
+    # original = create_synthetic_map(256)
+    original = load_image("input.png")
+
+    # Quantize if needed (for fair evaluation)
+    from src.quantization import should_quantize, quantize_colors
+    if should_quantize(original, threshold=50):
+        print(f"Quantizing image to discrete color palette...")
+        original, palette = quantize_colors(original, n_colors=32)
+        print(f"Quantized to {len(palette)} colors")
+
     colors = get_unique_colors(original)
 
     # Test different noise types
@@ -230,7 +249,8 @@ def example_noise_comparison():
         mlf = MultiLayerFilter(
             filter_type='morphological',
             filter_params={'operation': 'opening', 'kernel_size': 3},
-            use_segmentation=True
+            use_segmentation=True,
+            auto_quantize=False  # Already quantized
         )
         filtered = mlf.filter_image(noisy)
 
@@ -258,7 +278,15 @@ def example_filter_comparison():
 
     # Create synthetic map
     print("Creating synthetic map image...")
-    original = create_synthetic_map(256)
+    # original = create_synthetic_map(256)
+    original = load_image("input.png")
+
+    # Quantize if needed (for fair evaluation)
+    from src.quantization import should_quantize, quantize_colors
+    if should_quantize(original, threshold=50):
+        print(f"Quantizing image to discrete color palette...")
+        original, palette = quantize_colors(original, n_colors=32)
+        print(f"Quantized to {len(palette)} colors")
 
     # Add noise
     print("Adding noise...")
@@ -280,7 +308,8 @@ def example_filter_comparison():
         mlf = MultiLayerFilter(
             filter_type=filter_type,
             filter_params=params,
-            use_segmentation=True
+            use_segmentation=True,
+            auto_quantize=False  # Already quantized
         )
         filtered = mlf.filter_image(noisy)
 

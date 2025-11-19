@@ -8,13 +8,15 @@ import cv2
 from typing import Tuple, Dict, Callable
 
 
-def inject_impulsive_noise(image: np.ndarray, noise_ratio: float = 0.1) -> np.ndarray:
+def inject_impulsive_noise(image: np.ndarray, noise_ratio: float = 0.1, use_palette_colors: bool = True) -> np.ndarray:
     """
-    Inject impulsive (salt-and-pepper) noise into an image.
+    Inject impulsive noise into an image.
 
     Args:
         image: Input RGB image
         noise_ratio: Ratio of pixels to corrupt (0.0 to 1.0)
+        use_palette_colors: If True, use only colors from the image palette (more realistic for maps).
+                           If False, use traditional salt-and-pepper (black/white) noise.
 
     Returns:
         Noisy image
@@ -23,20 +25,46 @@ def inject_impulsive_noise(image: np.ndarray, noise_ratio: float = 0.1) -> np.nd
     height, width = image.shape[:2]
     num_pixels = int(height * width * noise_ratio)
 
-    # Random positions for noise
-    noise_coords = np.random.randint(0, height * width, num_pixels)
+    if num_pixels == 0:
+        return noisy
 
-    for coord in noise_coords:
-        y = coord // width
-        x = coord % width
+    if use_palette_colors:
+        # Use colors from the image palette (more realistic for discrete-color maps)
+        pixels = image.reshape(-1, 3)
+        unique_colors = np.unique(pixels, axis=0)
 
-        # Random color for noise
-        if np.random.rand() < 0.5:
-            # Salt (white)
-            noisy[y, x] = [255, 255, 255]
-        else:
-            # Pepper (black)
-            noisy[y, x] = [0, 0, 0]
+        # Random positions for noise
+        noise_y = np.random.randint(0, height, num_pixels)
+        noise_x = np.random.randint(0, width, num_pixels)
+
+        # Random colors from palette
+        for i in range(num_pixels):
+            y, x = noise_y[i], noise_x[i]
+            current_color = image[y, x]
+
+            # Select a different color from the palette
+            new_color = unique_colors[np.random.randint(0, len(unique_colors))]
+            attempts = 0
+            while np.array_equal(new_color, current_color) and attempts < 10:
+                new_color = unique_colors[np.random.randint(0, len(unique_colors))]
+                attempts += 1
+
+            noisy[y, x] = new_color
+    else:
+        # Traditional salt-and-pepper noise (black and white)
+        noise_coords = np.random.randint(0, height * width, num_pixels)
+
+        for coord in noise_coords:
+            y = coord // width
+            x = coord % width
+
+            # Random color for noise
+            if np.random.rand() < 0.5:
+                # Salt (white)
+                noisy[y, x] = [255, 255, 255]
+            else:
+                # Pepper (black)
+                noisy[y, x] = [0, 0, 0]
 
     return noisy
 
@@ -296,7 +324,7 @@ def print_evaluation_results(metrics: Dict[str, float], filter_name: str = "Filt
     print(f"Evaluation Results for {filter_name}")
     print(f"{'='*60}")
 
-    print(f"\nColor Distance (ΔE - CIE LAB):")
+    print(f"\nColor Distance (DeltaE - CIE LAB):")
     print(f"  Noisy:       {metrics['delta_e_noisy']:.2f}")
     print(f"  Filtered:    {metrics['delta_e_filtered']:.2f}")
     print(f"  Improvement: {metrics['delta_e_improvement']:.2f}")
