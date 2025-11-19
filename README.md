@@ -137,7 +137,7 @@ Metrics include:
 
 ## Project Structure
 
-```
+```ini
 multi-layer-map-filter/
 ├── src/
 │   ├── __init__.py           # Package initialization
@@ -146,13 +146,14 @@ multi-layer-map-filter/
 │   ├── segmentation.py       # Region-based segmentation
 │   ├── reconstruction.py     # Layer merging and reconstruction
 │   ├── evaluation.py         # Evaluation metrics and noise injection
-│   └── main.py              # Main pipeline and convenience functions
+│   └── main.py               # Main pipeline and convenience functions
 ├── docs/
+│   ├── icip.2009.5414038.pdf # Original research paper
 │   └── implementation-plan.md # Detailed implementation plan
 ├── example_usage.py          # Example scripts
 ├── requirements.txt          # Python dependencies
-├── README.md                # This file
-└── venv/                    # Virtual environment (created during setup)
+├── README.md                 # This file
+└── venv/                     # Virtual environment (created during setup)
 ```
 
 ## Algorithm Overview
