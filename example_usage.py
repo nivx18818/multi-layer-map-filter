@@ -155,9 +155,9 @@ def example_basic_filtering():
     # Apply filter
     print("Applying multi-layer filter...")
     mlf = MultiLayerFilter(
-        filter_type='morphological',
-        filter_params={'operation': 'opening', 'kernel_size': 3},
-        use_segmentation=True,
+        filter_type='median',
+        filter_params={'kernel_size': 3},
+        use_segmentation=False,  # Segmentation-based reconstruction not recommended
         auto_quantize=False  # Already quantized
     )
     filtered = mlf.filter_image(noisy)
@@ -247,9 +247,9 @@ def example_noise_comparison():
 
         # Apply filter
         mlf = MultiLayerFilter(
-            filter_type='morphological',
-            filter_params={'operation': 'opening', 'kernel_size': 3},
-            use_segmentation=True,
+            filter_type='median',
+            filter_params={'kernel_size': 3},
+            use_segmentation=False,  # Segmentation-based reconstruction not recommended
             auto_quantize=False  # Already quantized
         )
         filtered = mlf.filter_image(noisy)
@@ -294,21 +294,21 @@ def example_filter_comparison():
 
     # Test different filter configurations
     configs = [
-        ('Morphological Opening', 'morphological', {'operation': 'opening', 'kernel_size': 3}),
-        ('Morphological Closing', 'morphological', {'operation': 'closing', 'kernel_size': 3}),
-        ('Median Filter', 'median', {'kernel_size': 3}),
-        ('Combined Filter', 'combined', {})
+        ('Median Filter (No Seg)', 'median', {'kernel_size': 3}, False),
+        ('Median Filter k=5 (No Seg)', 'median', {'kernel_size': 5}, False),
+        ('Median Filter (With Seg)', 'median', {'kernel_size': 3}, True),
+        ('Morphological Opening', 'morphological', {'operation': 'opening', 'kernel_size': 3}, False),
     ]
 
     results = []
 
-    for name, filter_type, params in configs:
+    for name, filter_type, params, use_seg in configs:
         print(f"\nTesting {name}...")
 
         mlf = MultiLayerFilter(
             filter_type=filter_type,
             filter_params=params,
-            use_segmentation=True,
+            use_segmentation=use_seg,
             auto_quantize=False  # Already quantized
         )
         filtered = mlf.filter_image(noisy)

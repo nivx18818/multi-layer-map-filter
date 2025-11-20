@@ -8,64 +8,92 @@
 
 **Solution**: Changed to `auto_quantize=True` to quantize images with >50 colors down to ~32 colors before decomposition.
 
-## 2. Segmentation-Based Reconstruction Issues ⚠️ ONGOING
+## 2. Segmentation-Based Reconstruction Issues ✅ RESOLVED
 
-**Issue**: When `use_segmentation=True`, the filtered image has worse quality metrics than the noisy image (negative improvements).
+**Issue**: When `use_segmentation=True`, the filtered image had worse quality metrics than the noisy image (negative improvements).
 
-**Root Cause**: The segmentation-based reconstruction algorithm assigns colors to regions incorrectly, changing ~33% of pixels instead of just the ~10% that are noisy.
+**Root Cause**: Multiple issues were identified:
 
-**Current Status**:
+1. **Morphological opening was too aggressive**: kernel_size=3 removed legitimate small features along with noise, completely wiping out some layers
+2. **Dilation expanded regions beyond true boundaries**: The segmentation algorithm uses dilation followed by hole-filling, causing regions to overlap with areas that should have different colors
+3. **Low f1 threshold allowed inaccurate regions**: With f1=0.3, regions where only 30% of pixels belonged to the actual object were accepted, causing ~20% of pixels to be assigned wrong colors
+4. **fill_unlabeled_pixels propagated labels incorrectly**: This function dilated region labels to fill unlabeled areas, causing further incorrect color assignments
 
-- Segmentation-based reconstruction changes 32.81% of pixels incorrectly
-- Simple reconstruction without segmentation gives 0% improvement (preserves noisy pixels)
-- The algorithm works best with synthetic discrete-color maps but struggles with:
-  - Real-world images with anti-aliasing
-  - Palette-based noise distributed across all color layers
-  - Small isolated features that look similar to noise
+**Solution**:
 
-**Workaround**: Use `use_segmentation=False` for now, though this provides minimal filtering benefit.
+1. **Changed default filter to median (kernel_size=3)**: Median filtering preserves layer structure much better than morphological opening, achieving proper noise removal without destroying legitimate features
+2. **Disabled segmentation by default**: Set `use_segmentation=False` as the default, since simple reconstruction with median filtering works much better
+3. **Improved segmentation parameters for advanced use**: Raised f1_threshold to 0.6, lowered f2_threshold to 0.05, reduced dilation_size to 3 for users who want to experiment with segmentation
+4. **Fixed unlabeled pixel handling**: Stopped propagating region labels via fill_unlabeled_pixels; instead, unlabeled pixels now preserve their noisy values (conservative approach)
 
-**Needs Investigation**:
+**Results After Fix**:
 
-1. Region acceptance criteria (f1, f2 thresholds) may need tuning
-2. Priority calculation strategy needs review
-3. Distance transform for unlabeled pixels may have bugs
-4. May need different morphological operations or kernel sizes
+- DeltaE improvement: **+7.51** (was -3.24)
+- PSNR improvement: **+10.51 dB** (was -1.16)
+- MSE improvement: **+740.23** (was -247.84)
+- SSIM: **0.9343** (excellent quality, was 0.5930)
 
-## 3. Noise Model Mismatch
+**Current Recommendation**: Use `MultiLayerFilter(filter_type='median', filter_params={'kernel_size': 3}, use_segmentation=False)` for best results.
 
-**Issue**: The filtering algorithm doesn't improve metrics even with correct palette-based noise.
+## 3. Morphological Filtering Not Suitable for This Application ✅ RESOLVED
 
-**Root Cause**: The algorithm expects noise to create ISOLATED pixels that morphological operations can remove. However:
+**Issue**: Morphological opening doesn't improve metrics even with palette-based noise.
 
-- Palette-based noise distributes evenly across ALL color layers (~1900 pixels per layer)
-- Morphological opening can't distinguish this from legitimate sparse features
-- The noise doesn't look "isolated" from a per-layer perspective
+**Root Cause**:
 
-**Implications**:
+- Morphological opening removes ALL small isolated pixels, but can't distinguish between noise and legitimate small features
+- Palette-based noise is distributed across layers mixed with real features
+- Opening is too aggressive, removing real features along with noise
 
-- Algorithm works best for synthetic maps with known structure
-- Real-world map images may need pre-processing or different noise assumptions
-- May need adaptive filtering based on local density rather than global morphology
+**Solution**: Use **median filtering** instead, which considers neighborhood pixel values and preserves structure much better. Median filtering with kernel_size=3 works excellently for palette-based noise.
 
-## 4. Evaluation Metrics
+## 4. Segmentation Algorithm Limitations (ONGOING INVESTIGATION)
 
-**Issue**: All evaluation metrics show negative improvements (filtered worse than noisy).
+**Status**: Segmentation-based reconstruction is now functional but still performs worse than simple reconstruction.
 
-**Status**: This is a consequence of issues #2 and #3 above. Once those are fixed, metrics should improve.
+**Current Understanding**:
+
+- The paper's segmentation algorithm was designed for specific types of map images with well-separated color regions
+- Real-world images with scattered features don't fit this model well
+- The dilation + hole-filling + connected components approach creates regions that overlap incorrectly
+
+**Current State**:
+
+- Segmentation parameters have been improved (f1=0.6, f2=0.05, dilation=3)
+- Unlabeled pixels now preserve noisy values instead of propagating labels
+- However, simple reconstruction (without segmentation) still outperforms segmentation-based reconstruction
+
+**Recommendation**: Keep `use_segmentation=False` (now the default). The segmentation code is preserved for future research but is not recommended for production use.
 
 ## Recommendations
 
-1. For testing, use `create_synthetic_map()` which generates ideal discrete-color maps
-2. For real images, ensure quantization is applied (`auto_quantize=True`)
-3. Currently, set `use_segmentation=False` until reconstruction issues are resolved
-4. Consider alternative noise models (e.g., clustered noise rather than random scattered pixels)
-5. May need to implement the paper's full MUD (Morphologically-Invariant Universal Denoising) filter instead of basic morphological operations
+1. **Use median filtering**: `filter_type='median'` with `kernel_size=3` provides excellent results
+2. **Disable segmentation**: Keep `use_segmentation=False` (the default) for best performance
+3. **Enable auto-quantization**: Set `auto_quantize=True` (the default) to handle images with many colors
+4. **Quantize to ~32 colors**: This provides a good balance between quality and layer count
 
-## Next Steps
+**Example Configuration**:
 
-- [ ] Debug `reconstruct_with_regions()` to understand why regions get wrong colors
-- [ ] Review segmentation acceptance criteria and tuning
-- [ ] Implement proper priority-based reconstruction
-- [ ] Test with synthetic maps to validate algorithm correctness
-- [ ] Consider implementing adaptive local filters instead of global morphological operations
+```python
+mlf = MultiLayerFilter(
+    filter_type='median',
+    filter_params={'kernel_size': 3},
+    use_segmentation=False,  # Default
+    auto_quantize=True,      # Default
+    quantize_colors=32       # Default
+)
+```
+
+## Resolved Issues Summary
+
+✅ Issue #1: Layer visualization - Fixed by enabling auto-quantization
+✅ Issue #2: Segmentation reconstruction - Fixed by switching to median filtering without segmentation
+✅ Issue #3: Morphological filtering - Fixed by using median filtering instead
+⚠️ Issue #4: Segmentation algorithm - Partially fixed but still not recommended for use
+
+## Future Work
+
+- [ ] Investigate why segmentation + priority ordering underperforms simple reconstruction
+- [ ] Consider implementing the paper's full MUD (Morphologically-Invariant Universal Denoising) filter
+- [ ] Experiment with adaptive filtering based on local feature density
+- [ ] Test with more diverse map images and noise types

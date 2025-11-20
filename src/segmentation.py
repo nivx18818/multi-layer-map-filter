@@ -10,9 +10,9 @@ from typing import List, Tuple, Dict
 
 def segment_layers(filtered_layers: List[np.ndarray],
                    colors: np.ndarray,
-                   f1_threshold: float = 0.5,
-                   f2_threshold: float = 0.8,
-                   dilation_size: int = 5) -> Tuple[np.ndarray, List[Dict]]:
+                   f1_threshold: float = 0.6,
+                   f2_threshold: float = 0.05,
+                   dilation_size: int = 3) -> Tuple[np.ndarray, List[Dict]]:
     """
     Segment filtered layers into distinct regions using the algorithm from Figure 3.
 
@@ -26,9 +26,9 @@ def segment_layers(filtered_layers: List[np.ndarray],
     Args:
         filtered_layers: List of filtered binary layers
         colors: Array of colors corresponding to each layer
-        f1_threshold: Threshold for object pixel ratio (default 0.5)
-        f2_threshold: Threshold for labeled pixel percentage (default 0.8)
-        dilation_size: Size of dilation kernel for region expansion
+        f1_threshold: Threshold for object pixel ratio (default 0.6 - regions must be 60% accurate)
+        f2_threshold: Threshold for labeled pixel percentage (default 0.05 - accept even small fragments)
+        dilation_size: Size of dilation kernel for region expansion (default 3 - smaller to avoid over-expansion)
 
     Returns:
         Tuple of:

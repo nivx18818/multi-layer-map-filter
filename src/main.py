@@ -31,11 +31,11 @@ class MultiLayerFilter:
     """
 
     def __init__(self,
-                 filter_type: str = 'morphological',
+                 filter_type: str = 'median',
                  filter_params: Optional[Dict] = None,
-                 use_segmentation: bool = True,
-                 f1_threshold: float = 0.5,
-                 f2_threshold: float = 0.8,
+                 use_segmentation: bool = False,
+                 f1_threshold: float = 0.6,
+                 f2_threshold: float = 0.05,
                  auto_quantize: bool = True,
                  quantize_colors: int = 32,
                  quantize_threshold: int = 50):
@@ -43,11 +43,11 @@ class MultiLayerFilter:
         Initialize the multi-layer filter.
 
         Args:
-            filter_type: Type of binary filter ('morphological', 'median', 'combined')
+            filter_type: Type of binary filter ('median' is recommended, 'morphological', 'combined')
             filter_params: Parameters for the filter
-            use_segmentation: Whether to use region-based segmentation
-            f1_threshold: Threshold for object pixel ratio in segmentation
-            f2_threshold: Threshold for labeled pixel percentage in segmentation
+            use_segmentation: Whether to use region-based segmentation (default False - simple reconstruction works better)
+            f1_threshold: Threshold for object pixel ratio in segmentation (default 0.6 - 60% accuracy required)
+            f2_threshold: Threshold for labeled pixel percentage in segmentation (default 0.05 - accept small fragments)
             auto_quantize: Automatically quantize images with many colors
             quantize_colors: Maximum number of colors when quantizing
             quantize_threshold: Threshold for automatic quantization (number of unique colors)
@@ -94,8 +94,9 @@ class MultiLayerFilter:
                 self.f2_threshold
             )
 
-            # Fill unlabeled pixels
-            label_mask = fill_unlabeled_pixels(label_mask, filtered_layers)
+            # DO NOT fill unlabeled pixels - let reconstruction handle them
+            # This prevents incorrect color propagation
+            # label_mask = fill_unlabeled_pixels(label_mask, filtered_layers)
 
             # Calculate priorities
             priority_map = calculate_color_priorities(
@@ -107,12 +108,13 @@ class MultiLayerFilter:
             )
 
             # Step 5: Reconstruct with regions
+            # Pass the processed (quantized) noisy image so unlabeled pixels preserve their noisy values
             output_image = reconstruct_with_regions(
                 filtered_layers,
                 colors,
                 label_mask,
                 region_info,
-                original_image=processed_image
+                original_image=processed_image  # Use processed_image which is the quantized noisy input
             )
         else:
             # Simple reconstruction with global priorities

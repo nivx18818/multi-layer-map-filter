@@ -125,18 +125,18 @@ def reconstruct_with_regions(filtered_layers: List[np.ndarray],
         region_mask = label_mask == label
         output_image[region_mask] = color
 
-    # Handle any unlabeled pixels (should be rare after fill_unlabeled_pixels)
+    # Handle unlabeled pixels: these are areas where we're not confident about filtering
+    # Preserve the original (noisy) image values for these pixels
     unlabeled = label_mask == 0
     if np.any(unlabeled):
-        # First try simple layer-based reconstruction
-        for layer_idx, layer in enumerate(filtered_layers):
-            mask = unlabeled & (layer > 0)
-            output_image[mask] = colors[layer_idx]
-
-        # For remaining unlabeled pixels, use original image if available
-        still_unlabeled = (output_image == 0).all(axis=-1)
-        if original_image is not None and np.any(still_unlabeled):
-            output_image[still_unlabeled] = original_image[still_unlabeled]
+        if original_image is not None:
+            # Preserve noisy pixels where we didn't confidently assign a region
+            output_image[unlabeled] = original_image[unlabeled]
+        else:
+            # Fallback: use filtered layers directly
+            for layer_idx, layer in enumerate(filtered_layers):
+                mask = unlabeled & (layer > 0)
+                output_image[mask] = colors[layer_idx]
 
     # Final check: if any black pixels remain and we have original, fill them
     if original_image is not None:
