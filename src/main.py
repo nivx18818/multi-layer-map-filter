@@ -34,8 +34,10 @@ class MultiLayerFilter:
                  filter_type: str = 'median',
                  filter_params: Optional[Dict] = None,
                  use_segmentation: bool = False,
-                 f1_threshold: float = 0.6,
+                 f1_threshold: float = 0.9,
                  f2_threshold: float = 0.05,
+                 skip_dilation: bool = True,
+                 dilation_size: int = 0,
                  auto_quantize: bool = True,
                  quantize_colors: int = 32,
                  quantize_threshold: int = 50):
@@ -46,8 +48,10 @@ class MultiLayerFilter:
             filter_type: Type of binary filter ('median' is recommended, 'morphological', 'combined')
             filter_params: Parameters for the filter
             use_segmentation: Whether to use region-based segmentation (default False - simple reconstruction works better)
-            f1_threshold: Threshold for object pixel ratio in segmentation (default 0.6 - 60% accuracy required)
+            f1_threshold: Threshold for object pixel ratio in segmentation (default 0.9 - 90% accuracy required)
             f2_threshold: Threshold for labeled pixel percentage in segmentation (default 0.05 - accept small fragments)
+            skip_dilation: Skip dilation step in segmentation (default True - preserves accurate boundaries)
+            dilation_size: Size of dilation kernel if not skipping (default 0)
             auto_quantize: Automatically quantize images with many colors
             quantize_colors: Maximum number of colors when quantizing
             quantize_threshold: Threshold for automatic quantization (number of unique colors)
@@ -57,6 +61,8 @@ class MultiLayerFilter:
         self.use_segmentation = use_segmentation
         self.f1_threshold = f1_threshold
         self.f2_threshold = f2_threshold
+        self.skip_dilation = skip_dilation
+        self.dilation_size = dilation_size
         self.auto_quantize = auto_quantize
         self.quantize_colors = quantize_colors
         self.quantize_threshold = quantize_threshold
@@ -91,7 +97,9 @@ class MultiLayerFilter:
                 filtered_layers,
                 colors,
                 self.f1_threshold,
-                self.f2_threshold
+                self.f2_threshold,
+                self.dilation_size,
+                self.skip_dilation
             )
 
             # DO NOT fill unlabeled pixels - let reconstruction handle them

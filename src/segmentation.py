@@ -10,15 +10,16 @@ from typing import List, Tuple, Dict
 
 def segment_layers(filtered_layers: List[np.ndarray],
                    colors: np.ndarray,
-                   f1_threshold: float = 0.6,
+                   f1_threshold: float = 0.9,
                    f2_threshold: float = 0.05,
-                   dilation_size: int = 3) -> Tuple[np.ndarray, List[Dict]]:
+                   dilation_size: int = 0,
+                   skip_dilation: bool = True) -> Tuple[np.ndarray, List[Dict]]:
     """
     Segment filtered layers into distinct regions using the algorithm from Figure 3.
 
     Steps:
-    1. Dilate each filtered layer
-    2. Fill holes in dilated layers
+    1. Optionally dilate each filtered layer (default: skip dilation)
+    2. Fill holes in layers (if not skipping dilation)
     3. Apply connected components to find candidate regions
     4. Calculate acceptance criteria (f1, f2) for each region
     5. Generate label mask S_M
@@ -26,9 +27,10 @@ def segment_layers(filtered_layers: List[np.ndarray],
     Args:
         filtered_layers: List of filtered binary layers
         colors: Array of colors corresponding to each layer
-        f1_threshold: Threshold for object pixel ratio (default 0.6 - regions must be 60% accurate)
+        f1_threshold: Threshold for object pixel ratio (default 0.9 - regions must be 90% accurate)
         f2_threshold: Threshold for labeled pixel percentage (default 0.05 - accept even small fragments)
-        dilation_size: Size of dilation kernel for region expansion (default 3 - smaller to avoid over-expansion)
+        dilation_size: Size of dilation kernel for region expansion (default 0 - no dilation)
+        skip_dilation: Whether to skip dilation and hole-filling steps (default True - recommended)
 
     Returns:
         Tuple of:
@@ -43,29 +45,35 @@ def segment_layers(filtered_layers: List[np.ndarray],
     region_info = []
     current_label = 1
 
-    # Create dilation kernel
-    dilation_kernel = cv2.getStructuringElement(
-        cv2.MORPH_ELLIPSE,
-        (dilation_size, dilation_size)
-    )
+    # Create dilation kernel if needed
+    if not skip_dilation and dilation_size > 0:
+        dilation_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE,
+            (dilation_size, dilation_size)
+        )
 
     # Process each layer
     for layer_idx, layer in enumerate(filtered_layers):
-        # Step 1: Dilate the filtered layer
-        dilated = cv2.dilate(layer, dilation_kernel, iterations=1)
+        # Step 1: Optionally dilate the filtered layer
+        if skip_dilation or dilation_size == 0:
+            # Use filtered layer directly - this preserves accurate boundaries
+            processed_layer = layer.copy()
+        else:
+            processed_layer = cv2.dilate(layer, dilation_kernel, iterations=1)
 
-        # Step 2: Fill holes
-        # Use floodFill from the border to find background, then invert
-        filled = dilated.copy()
-        h, w = filled.shape
-        mask = np.zeros((h + 2, w + 2), np.uint8)
-        cv2.floodFill(filled, mask, (0, 0), 255)
-        filled_inv = cv2.bitwise_not(filled)
-        filled = cv2.bitwise_or(dilated, filled_inv)
+        # Step 2: Fill holes (only if we dilated)
+        if not skip_dilation and dilation_size > 0:
+            # Use floodFill from the border to find background, then invert
+            filled = processed_layer.copy()
+            h, w = filled.shape
+            mask = np.zeros((h + 2, w + 2), np.uint8)
+            cv2.floodFill(filled, mask, (0, 0), 255)
+            filled_inv = cv2.bitwise_not(filled)
+            processed_layer = cv2.bitwise_or(processed_layer, filled_inv)
 
         # Step 3: Find connected components
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-            filled, connectivity=8
+            processed_layer, connectivity=8
         )
 
         # Step 4: Evaluate each candidate region (skip background label 0)

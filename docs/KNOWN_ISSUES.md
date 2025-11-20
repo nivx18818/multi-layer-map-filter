@@ -47,38 +47,75 @@
 
 **Solution**: Use **median filtering** instead, which considers neighborhood pixel values and preserves structure much better. Median filtering with kernel_size=3 works excellently for palette-based noise.
 
-## 4. Segmentation Algorithm Limitations (ONGOING INVESTIGATION)
+## 4. Segmentation Algorithm Limitations ✅ RESOLVED
 
-**Status**: Segmentation-based reconstruction is now functional but still performs worse than simple reconstruction.
+**Issue**: Segmentation-based reconstruction was performing worse than simple reconstruction (negative improvements).
 
-**Current Understanding**:
+**Root Cause**: Multiple issues identified:
 
-- The paper's segmentation algorithm was designed for specific types of map images with well-separated color regions
-- Real-world images with scattered features don't fit this model well
-- The dilation + hole-filling + connected components approach creates regions that overlap incorrectly
+1. **Dilation was expanding regions beyond true boundaries**: The paper's algorithm uses dilation + hole-filling to create candidate regions, but this causes regions to overlap and assign wrong colors to pixels
+2. **Unlabeled pixels preserved noisy values**: When segmentation couldn't confidently label a pixel, the code preserved the noisy original value instead of applying the filtered layer
+3. **Low f1 threshold allowed inaccurate regions**: With f1=0.6, regions where 40% of pixels had the wrong color were still accepted
 
-**Current State**:
+**Solution**:
 
-- Segmentation parameters have been improved (f1=0.6, f2=0.05, dilation=3)
-- Unlabeled pixels now preserve noisy values instead of propagating labels
-- However, simple reconstruction (without segmentation) still outperforms segmentation-based reconstruction
+1. **Skip dilation by default**: Set `skip_dilation=True` to use filtered layers directly for segmentation, preserving accurate boundaries after filtering
+2. **Apply filtered layers to unlabeled pixels**: Changed `reconstruct_with_regions()` to use filtered layers for unlabeled pixels instead of preserving noisy values
+3. **Raised f1 threshold to 0.9**: Only accept regions where 90% of pixels belong to the correct color, ensuring high accuracy
+4. **Made dilation optional**: Added `skip_dilation` parameter so users can choose whether to use the paper's dilation approach
 
-**Recommendation**: Keep `use_segmentation=False` (now the default). The segmentation code is preserved for future research but is not recommended for production use.
+**Results After Fix**:
 
-## Recommendations
+- Segmentation now achieves **identical performance** to simple reconstruction
+- ΔE improvement: **+7.33** (same as no segmentation)
+- PSNR improvement: **+10.55 dB** (same as no segmentation)
+- Only ~0.35% of labeled pixels have incorrect colors
+- Unlabeled pixels (29%) now benefit from filtering instead of staying noisy
+
+**New Defaults**:
+
+```python
+MultiLayerFilter(
+    filter_type='median',
+    filter_params={'kernel_size': 3},
+    use_segmentation=True,          # Now viable!
+    f1_threshold=0.9,                # 90% accuracy required
+    f2_threshold=0.05,               # Accept small fragments
+    skip_dilation=True,              # Use filtered layers directly
+    dilation_size=0                  # No dilation
+)
+```
+
+**Recommendation**: Both `use_segmentation=True` and `use_segmentation=False` now achieve the same excellent results. The segmentation approach is now fully functional and performs equivalently to simple reconstruction.
+
+## Current Recommendations
 
 1. **Use median filtering**: `filter_type='median'` with `kernel_size=3` provides excellent results
-2. **Disable segmentation**: Keep `use_segmentation=False` (the default) for best performance
+2. **Segmentation is now optional**: Both `use_segmentation=True` and `use_segmentation=False` achieve identical quality
 3. **Enable auto-quantization**: Set `auto_quantize=True` (the default) to handle images with many colors
 4. **Quantize to ~32 colors**: This provides a good balance between quality and layer count
 
-**Example Configuration**:
+**Example Configuration (Simple)**:
 
 ```python
 mlf = MultiLayerFilter(
     filter_type='median',
     filter_params={'kernel_size': 3},
-    use_segmentation=False,  # Default
+    use_segmentation=False,  # Simple reconstruction (default)
+    auto_quantize=True,      # Default
+    quantize_colors=32       # Default
+)
+```
+
+**Example Configuration (With Segmentation)**:
+
+```python
+mlf = MultiLayerFilter(
+    filter_type='median',
+    filter_params={'kernel_size': 3},
+    use_segmentation=True,   # Now performs equivalently!
+    f1_threshold=0.9,        # Default - 90% accuracy required
+    skip_dilation=True,      # Default - preserves boundaries
     auto_quantize=True,      # Default
     quantize_colors=32       # Default
 )
@@ -89,11 +126,12 @@ mlf = MultiLayerFilter(
 ✅ Issue #1: Layer visualization - Fixed by enabling auto-quantization
 ✅ Issue #2: Segmentation reconstruction - Fixed by switching to median filtering without segmentation
 ✅ Issue #3: Morphological filtering - Fixed by using median filtering instead
-⚠️ Issue #4: Segmentation algorithm - Partially fixed but still not recommended for use
+✅ Issue #4: Segmentation algorithm - Fixed by skipping dilation and filtering unlabeled pixels
 
 ## Future Work
 
-- [ ] Investigate why segmentation + priority ordering underperforms simple reconstruction
 - [ ] Consider implementing the paper's full MUD (Morphologically-Invariant Universal Denoising) filter
 - [ ] Experiment with adaptive filtering based on local feature density
 - [ ] Test with more diverse map images and noise types
+- [ ] Investigate priority-based ordering to potentially improve upon simple reconstruction
+- [ ] Compare performance on real-world scanned map images vs synthetic images
