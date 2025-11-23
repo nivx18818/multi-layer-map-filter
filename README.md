@@ -70,18 +70,20 @@ save_image(filtered, 'output.png')
 
 ### Running Examples
 
-The project includes comprehensive examples demonstrating different features:
+- Place your `input.png` image in the project directory.
 
-```powershell
-python example_usage.py
-```
+- The project includes comprehensive examples demonstrating different features:
 
-This will run all examples and save visualizations to the `output/` directory:
+    ```powershell
+    python example_usage.py
+    ```
 
-- Basic filtering with synthetic map
-- Layer visualization
-- Noise type comparison (impulsive vs content-dependent)
-- Filter configuration comparison
+    This will run all examples and save visualizations to the `output/` directory:
+
+    - Basic filtering with synthetic map
+    - Layer visualization
+    - Noise type comparison (impulsive vs content-dependent)
+    - Filter configuration comparison
 
 ### Filter Configuration
 
@@ -148,7 +150,7 @@ multi-layer-map-filter/
 │   ├── evaluation.py         # Evaluation metrics and noise injection
 │   └── main.py               # Main pipeline and convenience functions
 ├── docs/
-│   ├── icip.2009.5414038.pdf # Original research paper
+│   ├── icip.2009.5414038/    # Original research paper
 │   └── implementation-plan.md # Detailed implementation plan
 ├── example_usage.py          # Example scripts
 ├── requirements.txt          # Python dependencies
